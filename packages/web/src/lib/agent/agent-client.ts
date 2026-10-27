@@ -365,6 +365,7 @@ export class AgentClient {
         model: this.model,
         messages: aiMessages,
         tools,
+        providerOptions: { openai: { store: false } },
         stopWhen: stepCountIs(50),
         abortSignal: ctx.abortSignal,
         onStepFinish: () => {
