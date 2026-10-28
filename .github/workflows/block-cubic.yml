@@ -8,6 +8,7 @@ on:
 
 jobs:
   check-mentions:
+    if: github.repository == 'superglue-ai/superglue'
     runs-on: ubuntu-latest
     steps:
       - name: Check for forbidden mentions

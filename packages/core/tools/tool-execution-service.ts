@@ -36,6 +36,21 @@ import { logMessage } from "../utils/logs.js";
 import { notifyWebhook } from "../utils/webhook.js";
 import type { ToolExecutionPayload, WorkerPools, ToolExecutionResult } from "../worker/types.js";
 
+const activeExecutions = new Set<Promise<unknown>>();
+
+function trackExecution<T>(execution: Promise<T>): Promise<T> {
+  activeExecutions.add(execution);
+  const release = () => {
+    activeExecutions.delete(execution);
+  };
+  execution.then(release, release);
+  return execution;
+}
+
+export async function drainToolExecutions(): Promise<void> {
+  while (activeExecutions.size) await Promise.allSettled([...activeExecutions]);
+}
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -67,7 +82,7 @@ export type ToolChainCallback = (
   credentials?: Record<string, string>,
   options?: RequestOptions,
   mode?: "dev" | "prod",
-) => void;
+) => Promise<void>;
 
 /**
  * Options for tool execution.
@@ -177,12 +192,14 @@ function handleWebhookNotification({
     }
     if (onToolChain) {
       // Use callback for chaining (REST API provides this)
-      onToolChain(
-        chainToolId,
-        data,
-        credentials,
-        { ...requestOptions, webhookUrl: undefined },
-        mode,
+      trackExecution(
+        onToolChain(
+          chainToolId,
+          data,
+          credentials,
+          { ...requestOptions, webhookUrl: undefined },
+          mode,
+        ),
       );
     } else {
       // No callback provided - log warning (scheduler don't support tool: chains)
@@ -213,7 +230,14 @@ function handleWebhookNotification({
  * @param options - Tool and execution options
  * @returns Execution result
  */
-export async function executeTool(
+export function executeTool(
+  ctx: ToolExecutionContext,
+  options: ExecuteToolOptions,
+): Promise<ExecuteToolResult> {
+  return trackExecution(runToolExecution(ctx, options));
+}
+
+async function runToolExecution(
   ctx: ToolExecutionContext,
   options: ExecuteToolOptions,
 ): Promise<ExecuteToolResult> {

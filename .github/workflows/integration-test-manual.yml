@@ -22,6 +22,7 @@ permissions:
 
 jobs:
   integration-test:
+    if: github.repository == 'superglue-ai/superglue'
     runs-on: ubuntu-latest
 
     steps:

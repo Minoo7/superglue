@@ -14,9 +14,11 @@ env:
 
 jobs:
   test:
+    if: github.repository == 'superglue-ai/superglue'
     uses: ./.github/workflows/node-test.yml
 
   build-and-push:
+    if: github.repository == 'superglue-ai/superglue'
     needs: test
     runs-on: ubuntu-latest
 

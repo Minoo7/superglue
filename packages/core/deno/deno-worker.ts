@@ -99,6 +99,7 @@ export class DenoWorker {
           this.options.scriptPath,
         ],
         {
+          detached: true,
           stdio: ["pipe", "pipe", "pipe"],
           env: {
             PATH: process.env.PATH,

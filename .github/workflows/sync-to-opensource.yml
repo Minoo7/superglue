@@ -7,7 +7,7 @@ on:
 
 jobs:
   sync-to-opensource:
-    if: github.event.pull_request.merged == true
+    if: github.repository == 'superglue-ai/superglue-hosted' && github.event.pull_request.merged == true
     runs-on: ubuntu-latest
 
     steps:

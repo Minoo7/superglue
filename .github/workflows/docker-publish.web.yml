@@ -14,6 +14,7 @@ env:
 
 jobs:
   build-and-push:
+    if: github.repository == 'superglue-ai/superglue'
     runs-on: ubuntu-latest
 
     steps:
