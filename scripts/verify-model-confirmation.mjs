@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import { chromium } from "playwright";
 const recovery = process.env.SUPERGLUE_CONFIRMATION_RECOVERY || "refresh";
-assert(["refresh", "replace"].includes(recovery));
+assert(["refresh", "replace", "server"].includes(recovery));
 const report = { outcome: "failed", chatRequests: 0, recovery };
 const hash = (s) => s.split("").reduce((a, c) => ((a << 5) - a + c.charCodeAt(0)) | 0, 0);
 const scope = "token:" + (hash(process.env.AUTH_TOKEN || "synthetic-pr-check") >>> 0).toString(16);
 const cacheKey = "superglue-conversations-" + Math.abs(hash(scope));
-let available = recovery === "replace";
+let available = recovery !== "refresh";
 const browser = await chromium.launch({ args: ["--no-sandbox", "--disable-dev-shm-usage"] });
 const page = await browser.newPage();
 page.setDefaultTimeout(20000);
@@ -80,6 +80,16 @@ try {
       request.modelSelection,
       recovery === "replace" ? undefined : convo.modelSelection,
     );
+    if (recovery === "server" && report.chatRequests === 1) {
+      return r.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({
+          error: "Synthetic server catalog outage",
+          code: "MODEL_SELECTION_REJECTED",
+        }),
+      });
+    }
     return r.fulfill({
       status: 200,
       contentType: "text/event-stream",
@@ -116,35 +126,58 @@ try {
   await page.getByRole("combobox", { name: "Model", exact: true }).waitFor();
   await page.getByRole("button", { name: "Past Chats", exact: true }).click();
   await page.locator('[data-history-panel] [title="Session: independent-confirmation"]').click();
-  await page
-    .getByText("Saved choice unavailable. Refresh or change it to send.", { exact: true })
-    .waitFor();
+  if (recovery !== "server")
+    await page
+      .getByText("Saved choice unavailable. Refresh or change it to send.", { exact: true })
+      .waitFor();
   const confirm = page.getByRole("button", { name: "Confirm", exact: true });
-  report.confirmEnabledWhileUnavailable = await confirm.isEnabled();
-  assert.equal(report.confirmEnabledWhileUnavailable, false);
-  assert.equal(await page.getByRole("button", { name: "Cancel", exact: true }).isEnabled(), false);
-  assert.equal(
-    await page.getByRole("button", { name: "Refresh models", exact: true }).isEnabled(),
-    true,
-  );
-  assert.equal(report.chatRequests, 0);
-  if (recovery === "replace") {
-    await page.getByRole("combobox", { name: "Model", exact: true }).click();
-    await page.getByRole("option", { name: "Deployment default", exact: true }).click();
+  if (recovery === "server") {
+    await confirm.click();
+    await page.getByText("Synthetic server catalog outage", { exact: true }).waitFor();
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll("button")].some(
+        (b) => b.textContent.trim() === "Confirm" && !b.disabled,
+      ),
+    );
+    report.restoredAfterServerRejection = true;
+    await confirm.click();
+    await page.waitForFunction(
+      () => !document.querySelector('button[aria-label="Model"]')?.disabled,
+    );
+    assert.equal(report.chatRequests, 2);
+    report.outcome = "passed";
   } else {
-    available = true;
-    await page.getByRole("button", { name: "Refresh models", exact: true }).click();
+    report.confirmEnabledWhileUnavailable = await confirm.isEnabled();
+    assert.equal(report.confirmEnabledWhileUnavailable, false);
+    assert.equal(
+      await page.getByRole("button", { name: "Cancel", exact: true }).isEnabled(),
+      false,
+    );
+    assert.equal(
+      await page.getByRole("button", { name: "Refresh models", exact: true }).isEnabled(),
+      true,
+    );
+    assert.equal(report.chatRequests, 0);
+    if (recovery === "replace") {
+      await page.getByRole("combobox", { name: "Model", exact: true }).click();
+      await page.getByRole("option", { name: "Deployment default", exact: true }).click();
+    } else {
+      available = true;
+      await page.getByRole("button", { name: "Refresh models", exact: true }).click();
+    }
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll("button")].some(
+        (b) => b.textContent.trim() === "Confirm" && !b.disabled,
+      ),
+    );
+    report.confirmEnabledAfterRecovery = await confirm.isEnabled();
+    await confirm.click();
+    await page.waitForFunction(
+      () => !document.querySelector('button[aria-label="Model"]')?.disabled,
+    );
+    assert.equal(report.chatRequests, 1);
+    report.outcome = "passed";
   }
-  await page.waitForFunction(() =>
-    [...document.querySelectorAll("button")].some(
-      (b) => b.textContent.trim() === "Confirm" && !b.disabled,
-    ),
-  );
-  report.confirmEnabledAfterRecovery = await confirm.isEnabled();
-  await confirm.click();
-  await page.waitForFunction(() => !document.querySelector('button[aria-label="Model"]')?.disabled);
-  assert.equal(report.chatRequests, 1);
-  report.outcome = "passed";
 } catch (error) {
   report.failure = error instanceof Error ? error.message : String(error);
 } finally {

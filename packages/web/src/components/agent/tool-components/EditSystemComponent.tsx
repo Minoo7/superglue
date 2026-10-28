@@ -118,7 +118,12 @@ function ModifySystemComponentImpl({
   }, [isCompleted, invalidateSystems]);
 
   useEffect(() => {
-    if (isCompleted || hasError || tool.status === "declined") {
+    if (
+      isCompleted ||
+      hasError ||
+      tool.status === "declined" ||
+      tool.status === "awaiting_confirmation"
+    ) {
       setIsExecuting(false);
     }
   }, [isCompleted, hasError, tool.status]);

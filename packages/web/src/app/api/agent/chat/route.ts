@@ -1,6 +1,7 @@
 "use server";
 
 import { validateAgentRequest } from "@/src/lib/agent/agent-request";
+import { MODEL_SELECTION_REJECTED } from "@/src/lib/agent/model-controls";
 import { ModelSelectionError, resolveModelSelection } from "@/src/lib/agent/model-controls.server";
 import { AgentClient } from "@/src/lib/agent/agent-client";
 import { authenticateNextJSApiRequest } from "@/src/lib/api-auth";
@@ -38,7 +39,10 @@ export async function POST(request: NextRequest) {
       const errorMessage =
         error instanceof Error ? error.message : "Agent request validation failed.";
       return NextResponse.json(
-        { error: errorMessage },
+        {
+          error: errorMessage,
+          ...(error instanceof ModelSelectionError ? { code: MODEL_SELECTION_REJECTED } : {}),
+        },
         {
           status: error instanceof ModelSelectionError ? error.status : 400,
         },

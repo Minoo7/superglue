@@ -106,11 +106,11 @@ export function CallSystemComponent({
   const hasError = output?.success === false && output?.error && !isDeclined;
 
   useEffect(() => {
-    if (isCompleted || isDeclined) {
+    if (isCompleted || isDeclined || tool.status === "awaiting_confirmation") {
       setDetailsExpanded(false);
       setIsExecuting(false);
     }
-  }, [isCompleted, isDeclined]);
+  }, [isCompleted, isDeclined, tool.status]);
 
   const generateCurlCommand = () => {
     let curl = `curl -X ${method}`;

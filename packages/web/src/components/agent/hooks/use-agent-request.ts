@@ -1,6 +1,8 @@
 "use client";
 
 import { tokenRegistry } from "@/src/lib/token-registry";
+import { MODEL_SELECTION_REJECTED } from "@/src/lib/agent/model-controls";
+import { mutateToolCallInMessages } from "@/src/lib/agent/agent-tools/tool-call-state";
 import { AgentRequest, ToolExecutionPolicies } from "@/src/lib/agent/agent-types";
 import {
   AgentModelSelection,
@@ -290,6 +292,7 @@ export function useAgentRequest({
         accessRulesContext,
       };
 
+      let modelSelectionRejected = false;
       try {
         const response = await fetch(chatEndpoint, {
           method: "POST",
@@ -308,6 +311,7 @@ export function useAgentRequest({
           let errorMessage = `HTTP error! status: ${response.status}`;
           try {
             const errorBody = await response.json();
+            modelSelectionRejected = errorBody.code === MODEL_SELECTION_REJECTED;
             if (errorBody.error) {
               errorMessage = errorBody.error;
             }
@@ -323,13 +327,25 @@ export function useAgentRequest({
         await processStreamData(reader, assistantMessage, () => createStreamingAssistantMessage(0));
       } catch (error) {
         if (error instanceof Error && error.name === "AbortError") return;
+        if (currentStreamControllerRef.current !== controller) return;
 
-        console.error("Error sending agent request:", error);
+        if (!modelSelectionRejected) console.error("Error sending agent request:", error);
         toast({
-          title: "Connection issue",
+          title: modelSelectionRejected ? "Model unavailable" : "Connection issue",
           description:
             error instanceof Error ? error.message : "Couldn't reach the server. Please try again.",
         });
+
+        if (modelSelectionRejected && shouldResume) {
+          const restored = mutateToolCallInMessages(messagesRef.current, resumeToolCallId!, {
+            status: "awaiting_confirmation",
+            confirmationState: "pending",
+          }).map((message) => (message.isStreaming ? { ...message, isStreaming: false } : message));
+          messagesRef.current = restored;
+          setMessages(restored);
+          streamStateRef.current = "paused";
+          return;
+        }
 
         setMessages((prev) => {
           const lastStreamingIndex = prev.findIndex((m) => m.isStreaming);

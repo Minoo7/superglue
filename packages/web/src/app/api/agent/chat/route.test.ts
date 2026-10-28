@@ -91,7 +91,9 @@ describe("chat model selection boundary", () => {
     vi.mocked(fetch).mockRejectedValue(new Error("private upstream URL and key"));
     const response = await POST(request({ modelId: "text" }));
     expect(response.status).toBe(503);
-    expect(await response.text()).not.toContain("private");
+    const body = await response.json();
+    expect(body.code).toBe("MODEL_SELECTION_REJECTED");
+    expect(JSON.stringify(body)).not.toContain("private");
     expect(initialize).not.toHaveBeenCalled();
   });
 

@@ -162,7 +162,12 @@ function CreateSystemComponentImpl({
   }, [isCompleted, systemId, invalidateSystems]);
 
   useEffect(() => {
-    if (isCompleted || tool.status === "declined" || tool.status === "error") {
+    if (
+      isCompleted ||
+      tool.status === "declined" ||
+      tool.status === "error" ||
+      tool.status === "awaiting_confirmation"
+    ) {
       setIsExecuting(false);
     }
   }, [isCompleted, tool.status]);

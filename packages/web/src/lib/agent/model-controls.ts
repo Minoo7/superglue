@@ -1,5 +1,7 @@
 import type { AgentModelOption, AgentModelSelection } from "@superglue/shared";
 
+export const MODEL_SELECTION_REJECTED = "MODEL_SELECTION_REJECTED";
+
 export function parseModelSelection(value: unknown): AgentModelSelection | undefined {
   if (value === undefined) return undefined;
   if (

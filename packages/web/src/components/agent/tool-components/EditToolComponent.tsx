@@ -78,6 +78,11 @@ export function EditToolComponent({
 
   const [currentConfig, setCurrentConfig] = useState<Tool | null>(null);
   const [hasActedOnDiffs, setHasActedOnDiffs] = useState(false);
+  useEffect(() => {
+    if (tool.status === "awaiting_confirmation" && tool.confirmationState === "pending") {
+      setHasActedOnDiffs(false);
+    }
+  }, [tool.status, tool.confirmationState]);
   const [editablePayload, setEditablePayload] = useState<string>("");
   const [approvalAction, setApprovalAction] = useState<"accept" | "accept_and_save" | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
