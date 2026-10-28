@@ -44,7 +44,7 @@ function ModifySystemComponentImpl({
   onAbortStream,
 }: ModifySystemComponentProps) {
   const { systems } = useSystems();
-  const { sendAgentRequest } = useAgentContext();
+  const { sendAgentRequest, modelControls } = useAgentContext();
   const invalidateSystems = useInvalidateSystems();
   const hasRefreshedRef = useRef(false);
   const [credentialValues, setCredentialValues] = useState<Record<string, string>>({});
@@ -124,7 +124,7 @@ function ModifySystemComponentImpl({
   }, [isCompleted, hasError, tool.status]);
 
   const handleConfirm = useCallback(() => {
-    if (!sendAgentRequest) return;
+    if (!sendAgentRequest || !modelControls.canSend) return;
 
     const allValues: Record<string, string> = {};
     for (const key of Object.keys(allCredentialFields)) {
@@ -164,12 +164,13 @@ function ModifySystemComponentImpl({
     onToolMutation,
     onToolUpdate,
     sendAgentRequest,
+    modelControls.canSend,
     systemConfig,
     tool.id,
   ]);
 
   const handleCancel = useCallback(() => {
-    if (!sendAgentRequest) return;
+    if (!sendAgentRequest || !modelControls.canSend) return;
 
     onToolUpdate?.(tool.id, { status: "declined" });
     onToolMutation?.(tool.id, {
@@ -180,7 +181,7 @@ function ModifySystemComponentImpl({
     sendAgentRequest(undefined, {
       resumeToolCallId: tool.id,
     });
-  }, [onToolMutation, onToolUpdate, sendAgentRequest, tool.id]);
+  }, [onToolMutation, onToolUpdate, sendAgentRequest, modelControls.canSend, tool.id]);
 
   const allBlankFieldsFilled = useMemo(() => {
     if (blankFields.length === 0) return true;
@@ -345,7 +346,7 @@ function ModifySystemComponentImpl({
               variant="glass"
               className="!bg-[#ffa500] hover:!bg-[#ffd700] dark:!bg-[#ffa500] dark:hover:!bg-[#ffd700] !text-black !border-amber-400/50 dark:!border-amber-500/50 font-semibold"
               onClick={handleConfirm}
-              disabled={!allBlankFieldsFilled || isExecuting}
+              disabled={!allBlankFieldsFilled || isExecuting || !modelControls.canSend}
             >
               {isExecuting ? (
                 <>
@@ -356,7 +357,12 @@ function ModifySystemComponentImpl({
                 "Confirm"
               )}
             </Button>
-            <Button size="sm" variant="glass" onClick={handleCancel} disabled={isExecuting}>
+            <Button
+              size="sm"
+              variant="glass"
+              onClick={handleCancel}
+              disabled={isExecuting || !modelControls.canSend}
+            >
               Cancel
             </Button>
           </div>

@@ -61,7 +61,7 @@ export function CallSystemComponent({
   sendAgentRequest,
   onAbortStream,
 }: CallSystemComponentProps) {
-  const { getToolPolicy, setToolPolicy } = useAgentContext();
+  const { getToolPolicy, setToolPolicy, modelControls } = useAgentContext();
   const currentPolicy = (getToolPolicy("call_system")?.autoExecute ||
     "ask_every_time") as CallSystemAutoExecute;
 
@@ -132,7 +132,7 @@ export function CallSystemComponent({
   };
 
   const handleConfirm = () => {
-    if (!sendAgentRequest) return;
+    if (!sendAgentRequest || !modelControls.canSend) return;
 
     setIsExecuting(true);
     onToolUpdate?.(tool.id, { status: "running" });
@@ -146,7 +146,7 @@ export function CallSystemComponent({
   };
 
   const handleCancel = () => {
-    if (!sendAgentRequest) return;
+    if (!sendAgentRequest || !modelControls.canSend) return;
 
     onToolUpdate?.(tool.id, { status: "declined" });
     onToolMutation?.(tool.id, {
@@ -570,7 +570,7 @@ export function CallSystemComponent({
                 variant="glass"
                 className="!bg-[#ffa500] hover:!bg-[#ffd700] dark:!bg-[#ffa500] dark:hover:!bg-[#ffd700] !text-black !border-amber-400/50 dark:!border-amber-500/50 font-semibold"
                 onClick={handleConfirm}
-                disabled={isExecuting}
+                disabled={isExecuting || !modelControls.canSend}
               >
                 {isExecuting ? (
                   <>
@@ -581,7 +581,12 @@ export function CallSystemComponent({
                   "Confirm"
                 )}
               </Button>
-              <Button size="sm" variant="glass" onClick={handleCancel} disabled={isExecuting}>
+              <Button
+                size="sm"
+                variant="glass"
+                onClick={handleCancel}
+                disabled={isExecuting || !modelControls.canSend}
+              >
                 Cancel
               </Button>
               <Select value={currentPolicy} onValueChange={handlePolicyChange}>

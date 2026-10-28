@@ -20,8 +20,8 @@ export function AgentModelControls() {
         (part) => part.type === "tool" && part.tool?.status === "awaiting_confirmation",
       ),
   );
-  const disabled =
-    isLoading || messages.some((message) => message.isStreaming) || pendingConfirmation;
+  const streaming = isLoading || messages.some((message) => message.isStreaming);
+  const disabled = streaming || pendingConfirmation;
   const selectedModel = models.find((model) => model.id === selection?.modelId);
   const unavailableModel = selection && !selectedModel;
   const unavailableEffort =
@@ -113,7 +113,7 @@ export function AgentModelControls() {
         variant="ghost"
         size="sm"
         className="h-8 text-xs"
-        disabled={disabled || status === "loading"}
+        disabled={streaming || status === "loading"}
         onClick={refresh}
       >
         Refresh models

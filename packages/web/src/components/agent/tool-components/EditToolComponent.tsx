@@ -44,7 +44,7 @@ export function EditToolComponent({
   filePayloads,
 }: EditToolComponentProps) {
   const toolConfigCtx = useToolConfigOptional();
-  const { messages, sendAgentRequest } = useAgentContext();
+  const { messages, sendAgentRequest, modelControls } = useAgentContext();
   const createClient = useSuperglueClient();
   const upsertTool = useUpsertTool();
 
@@ -280,7 +280,7 @@ export function EditToolComponent({
       rejectedDiffs: ToolDiff[];
       saveAfterAccept?: boolean;
     }) => {
-      if (!sendAgentRequest || approvalAction) return;
+      if (!sendAgentRequest || !modelControls.canSend || approvalAction) return;
 
       const saveAfterAccept =
         (result.approved || result.partial) &&
@@ -392,6 +392,7 @@ export function EditToolComponent({
     },
     [
       approvalAction,
+      modelControls.canSend,
       allowDraftOnlyAccept,
       persistToolConfig,
       sendAgentRequest,
