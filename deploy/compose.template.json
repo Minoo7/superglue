@@ -36,7 +36,7 @@
         "MINIO_NOTIFY_WEBHOOK_ENDPOINT_SUPERGLUE": "http://superglue:3002/v1/file-references/process",
         "MINIO_NOTIFY_WEBHOOK_AUTH_TOKEN_SUPERGLUE": "${SUPERGLUE_AUTH_TOKEN:?required}",
         "MINIO_NOTIFY_WEBHOOK_QUEUE_DIR_SUPERGLUE": "/data/webhook",
-        "MINIO_API_CORS_ALLOW_ORIGIN": "https://${SUPERGLUE_DIRECT_HOST:?required}:8443"
+        "MINIO_API_CORS_ALLOW_ORIGIN": "https://superglue.planasolutions.ai"
       },
       "ports": ["127.0.0.1:9100:9000"],
       "volumes": ["storage-data:/data"],
@@ -73,7 +73,7 @@
         "API_PORT": "3002",
         "WEB_PORT": "3001",
         "API_ENDPOINT": "https://${SUPERGLUE_DIRECT_HOST:?required}:8444",
-        "SUPERGLUE_APP_URL": "https://${SUPERGLUE_DIRECT_HOST:?required}:8443",
+        "SUPERGLUE_APP_URL": "https://superglue.planasolutions.ai",
         "AUTH_TOKEN": "${SUPERGLUE_AUTH_TOKEN:?required}",
         "MASTER_ENCRYPTION_KEY": "${MASTER_ENCRYPTION_KEY:?required}",
         "POSTGRES_HOST": "postgres",
@@ -153,7 +153,7 @@
       "volumes": ["/var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock"],
       "entrypoint": ["/bin/sh", "-ec"],
       "command": [
-        "tailscale --socket=/var/run/tailscale/tailscaled.sock serve --bg --https=8443 http://127.0.0.1:3101; tailscale --socket=/var/run/tailscale/tailscaled.sock serve --bg --https=8444 http://127.0.0.1:3102; tailscale --socket=/var/run/tailscale/tailscaled.sock serve --bg --https=8445 http://127.0.0.1:9100; tailscale --socket=/var/run/tailscale/tailscaled.sock serve status --json"
+        "tailscale --socket=/var/run/tailscale/tailscaled.sock serve --bg --tcp=3101 tcp://127.0.0.1:3101; tailscale --socket=/var/run/tailscale/tailscaled.sock serve --https=8443 off; tailscale --socket=/var/run/tailscale/tailscaled.sock serve --bg --https=8444 http://127.0.0.1:3102; tailscale --socket=/var/run/tailscale/tailscaled.sock serve --bg --https=8445 http://127.0.0.1:9100; tailscale --socket=/var/run/tailscale/tailscaled.sock serve status --json"
       ],
       "mem_limit": "128m",
       "logging": {
