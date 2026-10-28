@@ -7,6 +7,7 @@ on:
 
 jobs:
   test:
+    if: github.repository == 'superglue-ai/superglue'
     runs-on: ubuntu-latest
     env:
       VITE_REDIS_HOST: ${{ secrets.REDIS_HOST }}

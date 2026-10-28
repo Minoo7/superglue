@@ -1,0 +1,177 @@
+name: Release
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+  DISABLE_TELEMETRY: "true"
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+
+jobs:
+  verify:
+    if: github.repository == 'Minoo7/superglue'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22.16.0"
+          cache: npm
+      - name: Install locked dependencies
+        run: |
+          git config --global url.https://github.com/.insteadOf ssh://git@github.com/
+          npm ci --include=dev --include=optional --no-audit --no-fund
+      - name: Verify source and release behavior
+        run: bash deploy/verify.sh
+      - name: Validate generated Compose with synthetic Env
+        env:
+          POSTGRES_PASSWORD: synthetic-postgres
+          STORAGE_PASSWORD: synthetic-storage
+          SUPERGLUE_AUTH_TOKEN: synthetic-token
+          MASTER_ENCRYPTION_KEY: synthetic-encryption
+          CPA_API_KEY: synthetic-no-llm
+          SUPERGLUE_DIRECT_HOST: fixture.invalid
+          SUPERGLUE_POSTGRES_DATA_VOLUME: fixture-postgres
+          SUPERGLUE_STORAGE_DATA_VOLUME: fixture-storage
+          SUPERGLUE_CADDY_DATA_VOLUME: fixture-caddy-data
+          SUPERGLUE_CADDY_CONFIG_VOLUME: fixture-caddy-config
+        run: |
+          node deploy/release.mjs candidate "$GITHUB_SHA" "ghcr.io/minoo7/superglue@sha256:$(printf '1%.0s' {1..64})" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" /tmp/fixture-release.json
+          node deploy/release.mjs render /tmp/fixture-release.json /tmp/fixture-compose.json
+          docker compose -f /tmp/fixture-compose.json config --quiet
+      - name: Check deployment formatting and secrets
+        run: |
+          npx --no-install prettier --check 'deploy/*.{mjs,json,md}' .github/workflows/release.yml packages/core/index.ts
+          npx --no-install secretlint --maskSecrets 'deploy/**/*' .github/workflows/release.yml packages/core/index.ts
+
+  image-check:
+    needs: verify
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Reserve disk for the full application image
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          df -h /
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: linux/arm64
+          push: false
+          build-args: SOURCE_REVISION=${{ github.sha }}
+
+  image:
+    needs: verify
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Reserve disk for the full application image
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          df -h /
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        id: build
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: linux/arm64
+          push: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+          tags: ghcr.io/minoo7/superglue:run-${{ github.run_id }}-${{ github.run_attempt }}
+          build-args: SOURCE_REVISION=${{ github.sha }}
+
+  smoke:
+    needs: image
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    outputs:
+      image: ${{ steps.candidate.outputs.image }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22.16.0"
+      - name: Record exact image candidate
+        id: candidate
+        env:
+          DIGEST: ${{ needs.image.outputs.digest }}
+        run: |
+          IMAGE="ghcr.io/minoo7/superglue@$DIGEST"
+          node deploy/release.mjs candidate "$GITHUB_SHA" "$IMAGE" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" candidate.json
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+      - name: Smoke anonymous published image with disposable services
+        run: node deploy/smoke-image.mjs candidate.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tested-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            candidate.json
+            image-smoke.json
+          if-no-files-found: error
+
+  promote:
+    needs: [verify, image, smoke]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    concurrency:
+      group: superglue-production-promotion
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22.16.0"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: tested-release-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Validate tested candidate and promote with fresh refs
+        env:
+          EXPECTED_IMAGE: ${{ needs.smoke.outputs.image }}
+        run: |
+          node --input-type=module -e 'import fs from "node:fs"; import assert from "node:assert/strict"; const candidate=JSON.parse(fs.readFileSync("candidate.json")); const smoke=JSON.parse(fs.readFileSync("image-smoke.json")); assert.equal(candidate.sourceSha,process.env.GITHUB_SHA); assert.equal(candidate.image,process.env.EXPECTED_IMAGE); assert.equal(smoke.image,candidate.image); assert.equal(smoke.sourceSha,candidate.sourceSha); assert.equal(smoke.outcome,"passed");'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          node deploy/release.mjs validate candidate.json
+          node deploy/release.mjs promote candidate.json
