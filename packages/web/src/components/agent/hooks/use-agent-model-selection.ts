@@ -41,20 +41,21 @@ export function useAgentModelSelection(enabled: boolean) {
     if (!enabled) return;
     let active = true;
     const startRevision = revision.current;
-    preference.current = { scope };
+    const pendingPreference = { scope };
+    preference.current = pendingPreference;
     setChoice({ scope });
     if (scope) {
       loadFromCacheAsync<unknown>(PREFERENCE_KEY).then((value) => {
-        if (!active || getCacheScopeIdentifier() !== scope || revision.current !== startRevision)
-          return;
+        if (!active || getCacheScopeIdentifier() !== scope) return;
         let saved: AgentModelSelection | undefined;
         try {
           saved = parseModelSelection(value ?? undefined);
         } catch {
           return;
         }
-        preference.current = { scope, selection: saved };
-        setChoice({ scope, selection: saved });
+        if (preference.current === pendingPreference)
+          preference.current = { scope, selection: saved };
+        if (revision.current === startRevision) setChoice({ scope, selection: saved });
       });
     }
     return () => {
@@ -92,7 +93,6 @@ export function useAgentModelSelection(enabled: boolean) {
       revision.current++;
       setConversationScope(scope);
       setChoice({ scope, selection: next });
-      // Deployment default does not erase the last explicit choice for a new chat.
       if (next) {
         preference.current = { scope, selection: next };
         saveToCache(PREFERENCE_KEY, next);
