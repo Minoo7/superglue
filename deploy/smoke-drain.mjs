@@ -23,7 +23,7 @@ try {
             config: {
               type: "transform",
               transformCode:
-                'async () => { await fetch("http://127.0.0.1:39001/started"); await new Promise(resolve => setTimeout(resolve, 5000)); return { drained: true }; }',
+                '() => fetch("http://127.0.0.1:39001/started").then(() => new Promise(resolve => setTimeout(resolve, 5000))).then(() => ({ drained: true }))',
             },
           },
         ],
