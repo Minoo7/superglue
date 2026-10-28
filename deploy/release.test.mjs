@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -99,6 +99,58 @@ test("render rejects duplicate tokens and implicit volumes", () => {
     () => renderCompose(template.replace('"external": true', '"external": false'), record().image),
     /external/,
   );
+});
+
+test("ingress converges with an existing or absent HTTPS handler and rejects other failures", () => {
+  const directory = mkdtempSync(join(tmpdir(), "gitops-ingress-"));
+  const marker = join(directory, "handler");
+  const calls = join(directory, "calls");
+  const command = JSON.parse(template).services.ingress.command[0].replaceAll("$$", "$");
+  const stub = `tailscale() {
+    printf '%s\\n' "$*" >> "$INGRESS_CALLS"
+    case "$*" in
+      *'serve --https=8443 off')
+        if [ "$INGRESS_FAILURE" = denied ]; then
+          echo 'permission denied' >&2
+          return 42
+        fi
+        if [ -f "$INGRESS_MARKER" ]; then
+          rm "$INGRESS_MARKER"
+        else
+          echo 'error: failed to remove web serve: handler does not exist' >&2
+          return 1
+        fi
+        ;;
+    esac
+  }`;
+  const run = (failure = "") =>
+    spawnSync("sh", ["-ec", `${stub}\n${command}`], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        INGRESS_MARKER: marker,
+        INGRESS_CALLS: calls,
+        INGRESS_FAILURE: failure,
+      },
+    });
+  try {
+    writeFileSync(marker, "present");
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const result = run();
+      assert.equal(result.status, 0, result.stderr);
+    }
+    const completed = readFileSync(calls, "utf8");
+    assert.equal(completed.split("serve --bg --https=8444 ").length - 1, 2);
+    assert.equal(completed.split("serve --bg --https=8445 ").length - 1, 2);
+    assert.equal(completed.split("serve status --json").length - 1, 2);
+    writeFileSync(calls, "");
+    const denied = run("denied");
+    assert.notEqual(denied.status, 0);
+    assert.match(denied.stderr, /permission denied/);
+    assert.doesNotMatch(readFileSync(calls, "utf8"), /--https=8444|--https=8445|serve status/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 function fixture(fn) {
