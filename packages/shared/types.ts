@@ -846,3 +846,15 @@ export interface PatchSystemBody {
   tunnel?: TunnelConfig;
   environment?: "dev" | "prod";
 }
+
+export interface AgentModelSelection {
+  modelId: string;
+  reasoningEffort?: string;
+}
+
+export interface AgentModelOption {
+  id: string;
+  label: string;
+  reasoningEfforts: string[];
+  defaultReasoningEffort?: string;
+}
