@@ -153,7 +153,7 @@
       "volumes": ["/var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock"],
       "entrypoint": ["/bin/sh", "-ec"],
       "command": [
-        "tailscale --socket=/var/run/tailscale/tailscaled.sock serve --bg --tcp=3101 tcp://127.0.0.1:3101; tailscale --socket=/var/run/tailscale/tailscaled.sock serve --https=8443 off; tailscale --socket=/var/run/tailscale/tailscaled.sock serve --bg --https=8444 http://127.0.0.1:3102; tailscale --socket=/var/run/tailscale/tailscaled.sock serve --bg --https=8445 http://127.0.0.1:9100; tailscale --socket=/var/run/tailscale/tailscaled.sock serve status --json"
+        "tailscale --socket=/var/run/tailscale/tailscaled.sock serve --bg --tcp=3101 tcp://127.0.0.1:3101; if disabled_output=$$(tailscale --socket=/var/run/tailscale/tailscaled.sock serve --https=8443 off 2>&1); then :; else case \"$$disabled_output\" in *\"error: failed to remove web serve: handler does not exist\"*) : ;; *) printf '%s\\n' \"$$disabled_output\" >&2; exit 1 ;; esac; fi; tailscale --socket=/var/run/tailscale/tailscaled.sock serve --bg --https=8444 http://127.0.0.1:3102; tailscale --socket=/var/run/tailscale/tailscaled.sock serve --bg --https=8445 http://127.0.0.1:9100; tailscale --socket=/var/run/tailscale/tailscaled.sock serve status --json"
       ],
       "mem_limit": "128m",
       "logging": {

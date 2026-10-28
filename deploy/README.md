@@ -8,11 +8,11 @@ The first release starts in `hold`. Later candidates leave a held release unchan
 
 1. Enable GitHub Actions after the upstream workflow guards are present. Pull requests run read-only verification and an ARM64 image build. Only a trusted `main` run publishes an image.
 2. Merge the pipeline. If anonymous smoke rejects the first publication, make the GHCR package public in GitHub, then rerun the failed jobs. Keep the exact candidate digest. Do not add a registry credential to Portainer.
-3. Read the running containers' mounts. Record all four physical volume names, table counts, object counts, current image, and unrelated service identities.
+3. Read the running containers' mounts. Record all four physical volume names, table counts, object counts, current image, and unrelated service identities. Compare the current app URL, storage CORS origin, and Tailscale forwarding configuration against the release before stopping anything.
 4. Pre-pull the tested digest. Stop the old application after its active work finishes. Stop the old stack. Confirm no running container uses any of the four volumes.
 5. Create cold tar backups of all four volumes through read-only mounts. Store them outside Git, restrict access, verify archive readability, and record SHA-256 hashes. The new core can change the database schema on startup.
 6. Create a new Git-backed Compose stack from this repository, `refs/heads/production`, and `compose.json`. Copy the old stack's five secret Env values privately. Add `SUPERGLUE_DIRECT_HOST` and the four `SUPERGLUE_*_VOLUME` variables named in the template. Use the exact existing names. Missing volumes must fail startup.
-7. Enable polling with a permanent administrator account. Keep the old stack stopped with its metadata and image during the initial recovery window. Never start both stacks against these volumes.
+7. Create a Git Source with a permanent administrator account and set its polling interval to `1m`. Create the stack with that `SourceID`. Omit the legacy `AutoUpdate` block. Portainer rejects a nonempty block without a legacy interval or webhook, even when the Source already has an interval. Keep the old stack stopped with its metadata and image during the initial recovery window. Never start both stacks against these volumes.
 8. Verify application health, authenticated API behavior, S3 roundtrip, preserved database and object counts, CPA chat tool continuation, model controls, and the unchanged unrelated services.
 9. Enable automatic promotion with the command below. Merge a small real change, observe its new digest through polling without a manual redeploy, then perform the compatible rollback drill.
 
