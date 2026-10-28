@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import { chromium } from "playwright";
-const report = { outcome: "failed", chatRequests: 0 };
+const recovery = process.env.SUPERGLUE_CONFIRMATION_RECOVERY || "refresh";
+assert(["refresh", "replace"].includes(recovery));
+const report = { outcome: "failed", chatRequests: 0, recovery };
 const hash = (s) => s.split("").reduce((a, c) => ((a << 5) - a + c.charCodeAt(0)) | 0, 0);
 const scope = "token:" + (hash(process.env.AUTH_TOKEN || "synthetic-pr-check") >>> 0).toString(16);
 const cacheKey = "superglue-conversations-" + Math.abs(hash(scope));
-let available = false;
+let available = recovery === "replace";
 const browser = await chromium.launch({ args: ["--no-sandbox", "--disable-dev-shm-usage"] });
 const page = await browser.newPage();
 page.setDefaultTimeout(20000);
@@ -22,7 +24,10 @@ const convo = {
   title: "INDEPENDENT CONFIRMATION DIAGNOSTIC",
   sessionId: "independent-confirmation",
   timestamp: now,
-  modelSelection: { modelId: "gpt-6.1-terra", reasoningEffort: "low" },
+  modelSelection:
+    recovery === "replace"
+      ? { modelId: "retired-model" }
+      : { modelId: "gpt-6.1-terra", reasoningEffort: "low" },
   messages: [
     {
       id: "independent-user",
@@ -71,7 +76,10 @@ try {
     report.chatRequests++;
     const request = r.request().postDataJSON();
     assert.equal(request.resumeToolCallId, tool.id);
-    assert.deepEqual(request.modelSelection, convo.modelSelection);
+    assert.deepEqual(
+      request.modelSelection,
+      recovery === "replace" ? undefined : convo.modelSelection,
+    );
     return r.fulfill({
       status: 200,
       contentType: "text/event-stream",
@@ -120,8 +128,13 @@ try {
     true,
   );
   assert.equal(report.chatRequests, 0);
-  available = true;
-  await page.getByRole("button", { name: "Refresh models", exact: true }).click();
+  if (recovery === "replace") {
+    await page.getByRole("combobox", { name: "Model", exact: true }).click();
+    await page.getByRole("option", { name: "Deployment default", exact: true }).click();
+  } else {
+    available = true;
+    await page.getByRole("button", { name: "Refresh models", exact: true }).click();
+  }
   await page.waitForFunction(() =>
     [...document.querySelectorAll("button")].some(
       (b) => b.textContent.trim() === "Confirm" && !b.disabled,

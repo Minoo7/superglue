@@ -21,7 +21,7 @@ export function AgentModelControls() {
       ),
   );
   const streaming = isLoading || messages.some((message) => message.isStreaming);
-  const disabled = streaming || pendingConfirmation;
+  const disabled = streaming || (pendingConfirmation && canSend);
   const selectedModel = models.find((model) => model.id === selection?.modelId);
   const unavailableModel = selection && !selectedModel;
   const unavailableEffort =
