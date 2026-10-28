@@ -1,8 +1,8 @@
-import { setTimeout as delay } from "node:timers/promises";
 import { startApiServer } from "./api/api-server.js";
 import { bootstrapOss } from "./bootstrap/oss-bootstrap.js";
 import { createDataStore } from "./datastore/datastore.js";
 import { validateEnvironment } from "./shared/environment.js";
+import { drainToolExecutions } from "./tools/tool-execution-service.js";
 import { shutdownSharedHtmlMarkdownPool } from "./utils/html-markdown-pool.js";
 import { logMessage } from "./utils/logs.js";
 import { initializeWorkerPools } from "./worker/worker-pool-registry.js";
@@ -22,12 +22,7 @@ async function startServer() {
       const deadline = setTimeout(() => process.exit(1), 14_390_000);
       deadline.unref();
       await server.close();
-      while (
-        workerPools.toolExecution.getStats().busyWorkers ||
-        workerPools.toolExecution.getStats().queueSize
-      ) {
-        await delay(100);
-      }
+      await drainToolExecutions();
       await workerPools.toolExecution.shutdown();
       await shutdownSharedHtmlMarkdownPool();
       await datastore.disconnect();

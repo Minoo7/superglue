@@ -8,6 +8,8 @@ npm run test-no-watch --workspace=@superglue/core -- \
   api/response-helpers.test.ts \
   tools/response-filters.test.ts \
   auth/access-rule-evaluator.test.ts \
+  mcp/mcp-shutdown.test.ts \
+  tools/tool-execution-drain.test.ts \
   utils/encryption.test.ts \
   utils/timezone.test.ts \
   tunnel/tunnel-url-rewrite.test.ts \

@@ -6,6 +6,7 @@ import { RequestSource, SuperglueClient, Tool } from "@superglue/shared";
 import { randomUUID } from "crypto";
 import { Request, Response } from "express";
 import type { IncomingMessage, ServerResponse } from "http";
+import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { validateToken } from "../auth/auth.js";
 import { logMessage } from "../utils/logs.js";
@@ -354,11 +355,60 @@ The portal allows users to authenticate with all available systems that require 
 };
 
 export const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
+const standaloneResponses = new Set<ServerResponse>();
+const activeResponses = new Set<ServerResponse>();
+let closingStreams = false;
+
+export function registerMcpShutdown(server: FastifyInstance): void {
+  closingStreams = false;
+  server.addHook("preClose", async () => {
+    closingStreams = true;
+    for (const response of activeResponses) {
+      response.shouldKeepAlive = false;
+      response.once("finish", () => server.server.closeIdleConnections());
+    }
+    const closed = [...standaloneResponses].map(
+      (response) =>
+        new Promise<void>((resolve) => {
+          if (response.closed) {
+            resolve();
+            return;
+          }
+          const timeout = setTimeout(() => response.destroy(), 1000);
+          response.once("close", () => {
+            clearTimeout(timeout);
+            resolve();
+          });
+        }),
+    );
+    for (const transport of Object.values(transports)) transport.closeStandaloneSSEStream();
+    await Promise.all(closed);
+  });
+  server.addHook("onClose", async () => {
+    await Promise.all(Object.values(transports).map((transport) => transport.close()));
+  });
+}
 
 export const mcpHandler = async (
   req: IncomingMessage & { body?: any; authInfo?: any },
   res: ServerResponse,
 ) => {
+  activeResponses.add(res);
+  res.once("close", () => {
+    activeResponses.delete(res);
+  });
+  if (closingStreams) res.shouldKeepAlive = false;
+  if (req.method === "GET") {
+    if (closingStreams) {
+      res.writeHead(503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Server is shutting down" }));
+      return;
+    }
+    standaloneResponses.add(res);
+    res.once("close", () => {
+      standaloneResponses.delete(res);
+    });
+  }
   const sessionId = req.headers["mcp-session-id"] as string | undefined;
   let transport: StreamableHTTPServerTransport;
 

@@ -112,8 +112,7 @@ function createToolChainCallback(
     options?: RequestOptions,
     mode?: "dev" | "prod",
   ) => {
-    // Fire-and-forget chain execution
-    executeToolByIdAsync(
+    return executeToolByIdAsync(
       authReq,
       chainToolId,
       resultData,

@@ -14,7 +14,7 @@ import {
 } from "../auth/access-rule-evaluator.js";
 import { SystemAccessLevel } from "@superglue/shared";
 import { EEDataStore } from "../datastore/ee/types.js";
-import { mcpHandler } from "../mcp/mcp-server.js";
+import { mcpHandler, registerMcpShutdown } from "../mcp/mcp-server.js";
 import { getTunnelService } from "../tunnel/index.js";
 import { logMessage } from "../utils/logs.js";
 import { registerTelemetryHook } from "../utils/telemetry-hook.js";
@@ -210,6 +210,8 @@ export async function startApiServer(datastore: EEDataStore, workerPools: Worker
 
   // Register all API routes from modules
   await registerAllRoutes(fastify);
+
+  registerMcpShutdown(fastify);
 
   // MCP routes - use raw Node request/response with parsed body and auth context
   const mcpRouteHandler = async (request: any, reply: any) => {

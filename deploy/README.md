@@ -56,6 +56,8 @@ The source check builds shared and core, checks web types, runs all web tests, a
 - `api/response-helpers.test.ts`
 - `tools/response-filters.test.ts`
 - `auth/access-rule-evaluator.test.ts`
+- `mcp/mcp-shutdown.test.ts`
+- `tools/tool-execution-drain.test.ts`
 - `utils/encryption.test.ts`
 - `utils/timezone.test.ts`
 - `tunnel/tunnel-url-rewrite.test.ts`
