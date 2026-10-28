@@ -356,17 +356,12 @@ The portal allows users to authenticate with all available systems that require 
 
 export const transports: { [sessionId: string]: StreamableHTTPServerTransport } = {};
 const standaloneResponses = new Set<ServerResponse>();
-const activeResponses = new Set<ServerResponse>();
 let closingStreams = false;
 
 export function registerMcpShutdown(server: FastifyInstance): void {
   closingStreams = false;
   server.addHook("preClose", async () => {
     closingStreams = true;
-    for (const response of activeResponses) {
-      response.shouldKeepAlive = false;
-      response.once("finish", () => server.server.closeIdleConnections());
-    }
     const closed = [...standaloneResponses].map(
       (response) =>
         new Promise<void>((resolve) => {
@@ -393,10 +388,6 @@ export const mcpHandler = async (
   req: IncomingMessage & { body?: any; authInfo?: any },
   res: ServerResponse,
 ) => {
-  activeResponses.add(res);
-  res.once("close", () => {
-    activeResponses.delete(res);
-  });
   if (closingStreams) res.shouldKeepAlive = false;
   if (req.method === "GET") {
     if (closingStreams) {

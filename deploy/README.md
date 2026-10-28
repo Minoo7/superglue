@@ -54,6 +54,7 @@ node --test deploy/release.test.mjs
 The source check builds shared and core, checks web types, runs all web tests, and runs these offline core files. It does not run credential-dependent integration tests.
 
 - `api/response-helpers.test.ts`
+- `api/logs-shutdown.test.ts`
 - `tools/response-filters.test.ts`
 - `auth/access-rule-evaluator.test.ts`
 - `mcp/mcp-shutdown.test.ts`

@@ -6,6 +6,7 @@ npm run type-check --workspace=@superglue/web
 npm run test --workspace=@superglue/web
 npm run test-no-watch --workspace=@superglue/core -- \
   api/response-helpers.test.ts \
+  api/logs-shutdown.test.ts \
   tools/response-filters.test.ts \
   auth/access-rule-evaluator.test.ts \
   mcp/mcp-shutdown.test.ts \

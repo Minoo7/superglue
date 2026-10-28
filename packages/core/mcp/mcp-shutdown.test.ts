@@ -4,6 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { expect, it, vi } from "vitest";
 import { mcpHandler, registerMcpShutdown, transports } from "./mcp-server.js";
+import { registerHttpShutdown } from "../api/http-shutdown.js";
 
 vi.mock("../auth/auth.js", () => ({ validateToken: vi.fn() }));
 vi.mock("../utils/logs.js", () => ({ logMessage: vi.fn() }));
@@ -11,6 +12,7 @@ vi.mock("../utils/telemetry.js", () => ({ sessionId: "fixture", telemetryClient:
 
 it("should close idle MCP GET streams while preserving an active tool POST result", async () => {
   const server = Fastify();
+  registerHttpShutdown(server);
   registerMcpShutdown(server);
   let started!: () => void;
   let finish!: () => void;
@@ -103,6 +105,7 @@ it("should close idle MCP GET streams while preserving an active tool POST resul
 
 it("should reject an accepted GET that reaches MCP after shutdown starts", async () => {
   const server = Fastify();
+  registerHttpShutdown(server);
   registerMcpShutdown(server);
   let accepted!: () => void;
   let continueRequest!: () => void;

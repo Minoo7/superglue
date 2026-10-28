@@ -15,6 +15,8 @@ import {
 import { SystemAccessLevel } from "@superglue/shared";
 import { EEDataStore } from "../datastore/ee/types.js";
 import { mcpHandler, registerMcpShutdown } from "../mcp/mcp-server.js";
+import { registerLogShutdown } from "./logs.js";
+import { registerHttpShutdown } from "./http-shutdown.js";
 import { getTunnelService } from "../tunnel/index.js";
 import { logMessage } from "../utils/logs.js";
 import { registerTelemetryHook } from "../utils/telemetry-hook.js";
@@ -48,6 +50,7 @@ export async function startApiServer(datastore: EEDataStore, workerPools: Worker
     },
     requestTimeout: 30 * 60 * 1000, // 30 min — tools like backfill can run for 10+ min
   });
+  registerHttpShutdown(fastify);
 
   // Register CORS
   await fastify.register(cors, {
@@ -212,6 +215,7 @@ export async function startApiServer(datastore: EEDataStore, workerPools: Worker
   await registerAllRoutes(fastify);
 
   registerMcpShutdown(fastify);
+  registerLogShutdown(fastify);
 
   // MCP routes - use raw Node request/response with parsed body and auth context
   const mcpRouteHandler = async (request: any, reply: any) => {
