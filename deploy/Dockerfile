@@ -44,8 +44,8 @@ COPY --from=builder --chown=nodejs:nodejs /usr/src/app/packages/web/public ./pac
 COPY --from=builder --chown=nodejs:nodejs /usr/src/app/packages/web/next.config.ts ./packages/web/next.config.ts
 COPY --from=builder --chown=nodejs:nodejs /usr/src/app/packages/web/src/lib/agent/skills/content ./packages/web/src/lib/agent/skills/content
 COPY --from=builder --chown=nodejs:nodejs /usr/src/app/packages/core/deno-runtime ./packages/core/deno-runtime
-COPY --chown=nodejs:nodejs deploy/playwright.mjs ./deploy/
-RUN node deploy/playwright.mjs install && rm -rf /var/lib/apt/lists/* && mkdir -p .cache/deno .npm && chown -R nodejs:nodejs /usr/src/app
+COPY --chown=nodejs:nodejs deploy/playwright.mjs deploy/verify-web-formatting.mjs ./deploy/
+RUN node deploy/verify-web-formatting.mjs && node deploy/playwright.mjs install && rm -rf /var/lib/apt/lists/* && mkdir -p .cache/deno .npm && chown -R nodejs:nodejs /usr/src/app
 USER nodejs
 RUN deno cache --frozen --allow-import packages/core/deno-runtime/workflow-executor.ts
 EXPOSE 3001 3002

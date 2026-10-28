@@ -96,6 +96,7 @@
     "pdfjs-dist": "5.5.207",
     "pkce-challenge": "6.0.0",
     "posthog-js": "1.393.5",
+    "prettier": "3.7.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-scroll-to-bottom": "4.2.0",
