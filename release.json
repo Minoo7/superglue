@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "mode": "hold",
+  "mode": "auto",
   "sourceSha": "8b7736499b58ef578318b5dbd608643593f70159",
   "highWaterSourceSha": "8b7736499b58ef578318b5dbd608643593f70159",
   "image": "ghcr.io/minoo7/superglue@sha256:09f29c9060f477e3e998f3eed3a666512a3797656b8e3bcac35f3c7438e19710",
