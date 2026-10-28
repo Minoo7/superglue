@@ -1,0 +1,26 @@
+# Source-built web layer on the pinned production runtime. Build without app secrets.
+FROM superglueai/superglue@sha256:2357f2f1f98ddf8414494161ef502c912ed2db56baac9f600a1582b04fc2dc62 AS dependencies
+USER root
+WORKDIR /usr/src/app
+ENV NEXT_TELEMETRY_DISABLED=1 DISABLE_TELEMETRY=true PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+COPY package.json package-lock.json tsconfig.json turbo.json ./
+COPY packages/core/package.json ./packages/core/
+COPY packages/web/package.json ./packages/web/
+COPY packages/shared/package.json ./packages/shared/
+RUN git config --global url.https://github.com/.insteadOf ssh://git@github.com/ && npm ci --include=dev --no-audit --no-fund
+
+FROM dependencies AS builder
+COPY packages/shared ./packages/shared
+COPY packages/web ./packages/web
+RUN npm run build --workspace=@superglue/shared
+RUN NODE_OPTIONS=--max-old-space-size=2560 npm run build --workspace=@superglue/web
+
+FROM superglueai/superglue@sha256:2357f2f1f98ddf8414494161ef502c912ed2db56baac9f600a1582b04fc2dc62
+ARG SOURCE_REVISION
+LABEL org.opencontainers.image.source="https://github.com/Minoo7/superglue" org.opencontainers.image.revision="$SOURCE_REVISION"
+USER root
+RUN rm -rf /usr/src/app/packages/web/.next
+COPY --from=builder --chown=nodejs:nodejs /usr/src/app/packages/web/.next /usr/src/app/packages/web/.next
+COPY --from=builder --chown=nodejs:nodejs /usr/src/app/packages/shared/dist /usr/src/app/packages/shared/dist
+USER nodejs
