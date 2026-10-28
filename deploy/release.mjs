@@ -156,7 +156,6 @@ export function publishRelease({
   beforePush();
   check(remoteRef(remote, "main") === expectedMain, "Main changed before push");
   check(remoteRef(remote, "production") === parent, "Production changed before push");
-  // Git cannot atomically compare a read-only main ref and update production.
   git(["push", remote, `${commit}:refs/heads/production`]);
   return commit;
 }
