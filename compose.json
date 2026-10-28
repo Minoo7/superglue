@@ -1,0 +1,251 @@
+{
+  "services": {
+    "postgres": {
+      "image": "postgres@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab",
+      "restart": "unless-stopped",
+      "environment": {
+        "POSTGRES_USER": "superglue",
+        "POSTGRES_DB": "superglue",
+        "POSTGRES_PASSWORD": "${POSTGRES_PASSWORD:?required}"
+      },
+      "volumes": [
+        "postgres-data:/var/lib/postgresql/data"
+      ],
+      "mem_limit": "768m",
+      "cpus": 0.5,
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "pg_isready -U superglue -d superglue"
+        ],
+        "interval": "5s",
+        "timeout": "5s",
+        "retries": 12
+      },
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-size": "10m",
+          "max-file": "2"
+        }
+      }
+    },
+    "storage": {
+      "image": "pgsty/silo@sha256:7bb2aff6b89efe1cb1303c10fc21d579447434ed06649ac9ec05a5e2dbf30ad7",
+      "command": [
+        "server",
+        "/data",
+        "--console-address",
+        ":9001"
+      ],
+      "restart": "unless-stopped",
+      "environment": {
+        "MINIO_ROOT_USER": "superglue",
+        "MINIO_ROOT_PASSWORD": "${STORAGE_PASSWORD:?required}",
+        "MINIO_NOTIFY_WEBHOOK_ENABLE_SUPERGLUE": "on",
+        "MINIO_NOTIFY_WEBHOOK_ENDPOINT_SUPERGLUE": "http://superglue:3002/v1/file-references/process",
+        "MINIO_NOTIFY_WEBHOOK_AUTH_TOKEN_SUPERGLUE": "${SUPERGLUE_AUTH_TOKEN:?required}",
+        "MINIO_NOTIFY_WEBHOOK_QUEUE_DIR_SUPERGLUE": "/data/webhook",
+        "MINIO_API_CORS_ALLOW_ORIGIN": "https://${SUPERGLUE_DIRECT_HOST:?required}:8443"
+      },
+      "ports": [
+        "127.0.0.1:9100:9000"
+      ],
+      "volumes": [
+        "storage-data:/data"
+      ],
+      "mem_limit": "768m",
+      "cpus": 0.5,
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null"
+        ],
+        "interval": "10s",
+        "timeout": "5s",
+        "retries": 12,
+        "start_period": "20s"
+      },
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-size": "10m",
+          "max-file": "2"
+        }
+      }
+    },
+    "superglue": {
+      "image": "ghcr.io/minoo7/superglue@sha256:b25463bd242913862317c247c08a6942e20ff7b7ac3f4d91776424929787784b",
+      "restart": "unless-stopped",
+      "init": false,
+      "depends_on": {
+        "postgres": {
+          "condition": "service_healthy"
+        },
+        "storage": {
+          "condition": "service_healthy"
+        }
+      },
+      "environment": {
+        "API_PORT": "3002",
+        "WEB_PORT": "3001",
+        "API_ENDPOINT": "https://${SUPERGLUE_DIRECT_HOST:?required}:8444",
+        "SUPERGLUE_APP_URL": "https://${SUPERGLUE_DIRECT_HOST:?required}:8443",
+        "AUTH_TOKEN": "${SUPERGLUE_AUTH_TOKEN:?required}",
+        "MASTER_ENCRYPTION_KEY": "${MASTER_ENCRYPTION_KEY:?required}",
+        "POSTGRES_HOST": "postgres",
+        "POSTGRES_PORT": "5432",
+        "POSTGRES_USERNAME": "superglue",
+        "POSTGRES_PASSWORD": "${POSTGRES_PASSWORD:?required}",
+        "POSTGRES_DB": "superglue",
+        "POSTGRES_SSL": "false",
+        "LLM_PROVIDER": "OPENAI",
+        "OPENAI_BASE_URL": "https://cpa.planasolutions.ai/v1",
+        "OPENAI_API_KEY": "${CPA_API_KEY:?required}",
+        "OPENAI_MODEL": "gpt-6.1-sol",
+        "FILE_STORAGE_PROVIDER": "minio",
+        "S3_ENDPOINT": "https://${SUPERGLUE_DIRECT_HOST:?required}:8445",
+        "S3_PUBLIC_ENDPOINT": "https://${SUPERGLUE_DIRECT_HOST:?required}:8445",
+        "MINIO_ROOT_USER": "superglue",
+        "MINIO_ROOT_PASSWORD": "${STORAGE_PASSWORD:?required}",
+        "MINIO_BUCKET_NAME": "superglue-files",
+        "MINIO_BUCKET_PREFIX": "raw",
+        "START_SCHEDULER_SERVER": "true",
+        "DISABLE_TELEMETRY": "true",
+        "NODE_OPTIONS": "--max-old-space-size=1536"
+      },
+      "ports": [
+        "127.0.0.1:3101:3001",
+        "127.0.0.1:3102:3002"
+      ],
+      "mem_limit": "3584m",
+      "cpus": 1.5,
+      "pids_limit": 512,
+      "shm_size": "256m",
+      "stop_grace_period": "4h",
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "curl",
+          "-fsS",
+          "http://127.0.0.1:3002/v1/health"
+        ],
+        "interval": "20s",
+        "timeout": "10s",
+        "retries": 6,
+        "start_period": "90s"
+      },
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-size": "10m",
+          "max-file": "2"
+        }
+      }
+    },
+    "storage-init": {
+      "image": "pgsty/silo@sha256:7bb2aff6b89efe1cb1303c10fc21d579447434ed06649ac9ec05a5e2dbf30ad7",
+      "restart": "no",
+      "depends_on": {
+        "storage": {
+          "condition": "service_healthy"
+        },
+        "superglue": {
+          "condition": "service_started"
+        }
+      },
+      "environment": {
+        "MC_HOST_store": "http://superglue:${STORAGE_PASSWORD:?required}@storage:9000"
+      },
+      "entrypoint": [
+        "/bin/sh",
+        "-ec"
+      ],
+      "command": [
+        "mcli mb --ignore-existing store/superglue-files; if mcli event list store/superglue-files | (while IFS= read -r line; do case \"$$line\" in *arn:minio:sqs::SUPERGLUE:webhook*) exit 0 ;; esac; done; exit 1); then :; else mcli event add store/superglue-files arn:minio:sqs::SUPERGLUE:webhook --event put --prefix default/raw/; fi; mcli event list store/superglue-files"
+      ],
+      "mem_limit": "128m",
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-size": "10m",
+          "max-file": "2"
+        }
+      }
+    },
+    "ingress": {
+      "image": "tailscale/tailscale@sha256:b11583ad2e93e4671128538c88cf11f460444a5d7e449311dd1933a400ab849d",
+      "restart": "no",
+      "network_mode": "host",
+      "user": "0",
+      "volumes": [
+        "/var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock"
+      ],
+      "entrypoint": [
+        "/bin/sh",
+        "-ec"
+      ],
+      "command": [
+        "tailscale --socket=/var/run/tailscale/tailscaled.sock serve --bg --https=8443 http://127.0.0.1:3101; tailscale --socket=/var/run/tailscale/tailscaled.sock serve --bg --https=8444 http://127.0.0.1:3102; tailscale --socket=/var/run/tailscale/tailscaled.sock serve --bg --https=8445 http://127.0.0.1:9100; tailscale --socket=/var/run/tailscale/tailscaled.sock serve status --json"
+      ],
+      "mem_limit": "128m",
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-size": "10m",
+          "max-file": "2"
+        }
+      }
+    },
+    "internal-https": {
+      "image": "caddy@sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f",
+      "restart": "unless-stopped",
+      "entrypoint": [
+        "/bin/sh",
+        "-ec"
+      ],
+      "command": [
+        "cat > /tmp/Caddyfile <<'CADDY'\n{\n  auto_https disable_redirects\n}\nhttps://${SUPERGLUE_DIRECT_HOST:?required}:8443 {\n  tls {\n    get_certificate tailscale\n  }\n  reverse_proxy superglue:3001\n}\nhttps://${SUPERGLUE_DIRECT_HOST:?required}:8444 {\n  tls {\n    get_certificate tailscale\n  }\n  reverse_proxy superglue:3002\n}\nhttps://${SUPERGLUE_DIRECT_HOST:?required}:8445 {\n  tls {\n    get_certificate tailscale\n  }\n  reverse_proxy storage:9000\n}\nCADDY\nexec caddy run --config /tmp/Caddyfile --adapter caddyfile"
+      ],
+      "volumes": [
+        "/var/run/tailscale/tailscaled.sock:/var/run/tailscale/tailscaled.sock:ro",
+        "caddy-data:/data",
+        "caddy-config:/config"
+      ],
+      "networks": {
+        "default": {
+          "aliases": [
+            "${SUPERGLUE_DIRECT_HOST:?required}"
+          ]
+        }
+      },
+      "mem_limit": "128m",
+      "cpus": 0.25,
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-size": "10m",
+          "max-file": "2"
+        }
+      }
+    }
+  },
+  "volumes": {
+    "postgres-data": {
+      "external": true,
+      "name": "${SUPERGLUE_POSTGRES_DATA_VOLUME:?required}"
+    },
+    "storage-data": {
+      "external": true,
+      "name": "${SUPERGLUE_STORAGE_DATA_VOLUME:?required}"
+    },
+    "caddy-data": {
+      "external": true,
+      "name": "${SUPERGLUE_CADDY_DATA_VOLUME:?required}"
+    },
+    "caddy-config": {
+      "external": true,
+      "name": "${SUPERGLUE_CADDY_CONFIG_VOLUME:?required}"
+    }
+  }
+}
