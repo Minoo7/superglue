@@ -1,4 +1,5 @@
 import { Message } from "@superglue/shared";
+import { parseModelSelection } from "./model-controls";
 import { jsonSchema } from "ai";
 import { tavilySearch } from "@tavily/ai-sdk";
 import { AgentType, getAgent } from "./registries/agent-registry";
@@ -38,6 +39,7 @@ export function validateAgentRequest(body: any): ValidatedAgentRequest {
     throw new Error("Request must have userMessage or resumeToolCallId");
   }
 
+  const modelSelection = parseModelSelection(body.modelSelection);
   const agent = getAgent(body.agentId);
 
   if (body.toolExecutionPolicies && typeof body.toolExecutionPolicies !== "object") {
@@ -46,6 +48,7 @@ export function validateAgentRequest(body: any): ValidatedAgentRequest {
 
   return {
     agentId: body.agentId,
+    modelSelection,
     messages: body.messages,
     userMessage: body.userMessage,
     visibleUserMessageId: body.visibleUserMessageId,

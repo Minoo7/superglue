@@ -1,14 +1,22 @@
 "use client";
 
 import { tokenRegistry } from "@/src/lib/token-registry";
+import { MODEL_SELECTION_REJECTED } from "@/src/lib/agent/model-controls";
+import { mutateToolCallInMessages } from "@/src/lib/agent/agent-tools/tool-call-state";
 import { AgentRequest, ToolExecutionPolicies } from "@/src/lib/agent/agent-types";
-import { ExecutionFileEnvelope, Message, MessageReference } from "@superglue/shared";
+import {
+  AgentModelSelection,
+  ExecutionFileEnvelope,
+  Message,
+  MessageReference,
+} from "@superglue/shared";
 import { useCallback, useRef } from "react";
 import type { AgentConfig, UploadedFile, UseAgentRequestReturn } from "./types";
 import type { StreamState } from "./use-agent-streaming";
 
 interface UseAgentRequestOptions {
   config: AgentConfig;
+  getModelSelection?: () => AgentModelSelection | undefined;
   messagesRef: React.MutableRefObject<Message[]>;
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
@@ -56,6 +64,7 @@ function parseFileStateSnapshot(raw: string): FileStateSnapshot {
 
 export function useAgentRequest({
   config,
+  getModelSelection,
   messagesRef,
   setMessages,
   setIsLoading,
@@ -173,9 +182,17 @@ export function useAgentRequest({
         references?: MessageReference[];
       },
     ) => {
+      let modelSelection: AgentModelSelection | undefined;
+      try {
+        modelSelection = getModelSelection?.();
+      } catch (error) {
+        toast({
+          title: "Model unavailable",
+          description: error instanceof Error ? error.message : "Choose an available model.",
+        });
+        return;
+      }
       const hasMessage = userMessage && userMessage.trim().length > 0;
-
-      await Promise.resolve();
 
       const hiddenStarterMessage = options?.hiddenStarterMessage?.trim();
       const hasHiddenStarterMessage = !!hiddenStarterMessage;
@@ -259,6 +276,7 @@ export function useAgentRequest({
 
       const request: AgentRequest = {
         agentId: config.agentId,
+        ...(modelSelection ? { modelSelection } : {}),
         messages: currentMessages,
         userMessage: hasMessage ? userMessage!.trim() : undefined,
         visibleUserMessageId,
@@ -274,6 +292,7 @@ export function useAgentRequest({
         accessRulesContext,
       };
 
+      let modelSelectionRejected = false;
       try {
         const response = await fetch(chatEndpoint, {
           method: "POST",
@@ -292,6 +311,7 @@ export function useAgentRequest({
           let errorMessage = `HTTP error! status: ${response.status}`;
           try {
             const errorBody = await response.json();
+            modelSelectionRejected = errorBody.code === MODEL_SELECTION_REJECTED;
             if (errorBody.error) {
               errorMessage = errorBody.error;
             }
@@ -307,13 +327,25 @@ export function useAgentRequest({
         await processStreamData(reader, assistantMessage, () => createStreamingAssistantMessage(0));
       } catch (error) {
         if (error instanceof Error && error.name === "AbortError") return;
+        if (currentStreamControllerRef.current !== controller) return;
 
-        console.error("Error sending agent request:", error);
+        if (!modelSelectionRejected) console.error("Error sending agent request:", error);
         toast({
-          title: "Connection issue",
+          title: modelSelectionRejected ? "Model unavailable" : "Connection issue",
           description:
             error instanceof Error ? error.message : "Couldn't reach the server. Please try again.",
         });
+
+        if (modelSelectionRejected && shouldResume) {
+          const restored = mutateToolCallInMessages(messagesRef.current, resumeToolCallId!, {
+            status: "awaiting_confirmation",
+            confirmationState: "pending",
+          }).map((message) => (message.isStreaming ? { ...message, isStreaming: false } : message));
+          messagesRef.current = restored;
+          setMessages(restored);
+          streamStateRef.current = "paused";
+          return;
+        }
 
         setMessages((prev) => {
           const lastStreamingIndex = prev.findIndex((m) => m.isStreaming);
@@ -352,6 +384,7 @@ export function useAgentRequest({
     },
     [
       config,
+      getModelSelection,
       messagesRef,
       setMessages,
       setIsLoading,

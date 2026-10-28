@@ -31,6 +31,8 @@ export interface AgentInputAreaProps {
   maxLength?: number;
   compact?: boolean;
   showCharCount?: boolean;
+  toolbar?: React.ReactNode;
+  sendDisabled?: boolean;
   inputContainerRef?: React.RefObject<HTMLDivElement | null>;
   inputRef?: React.RefObject<HTMLTextAreaElement | null>;
   containerClassName?: string;
@@ -58,6 +60,8 @@ export function AgentInputArea({
   maxLength = 50000,
   compact = false,
   showCharCount = false,
+  toolbar,
+  sendDisabled = false,
   inputContainerRef,
   inputRef: inputRefProp,
   containerClassName,
@@ -118,13 +122,13 @@ export function AgentInputArea({
 
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        if (value.trim() && value.length <= maxLength) {
+        if (!sendDisabled && value.trim() && value.length <= maxLength) {
           onSend();
           scrollToBottom?.();
         }
       }
     },
-    [handleMentionKeyDown, value, maxLength, onSend, scrollToBottom],
+    [handleMentionKeyDown, value, maxLength, onSend, scrollToBottom, sendDisabled],
   );
 
   useEffect(() => {
@@ -149,7 +153,7 @@ export function AgentInputArea({
     inputClassName,
   );
 
-  const canSend = value.trim() && value.length <= maxLength;
+  const canSend = !sendDisabled && value.trim() && value.length <= maxLength;
   const showCount = showCharCount && value.length > maxLength * 0.8;
 
   return (
@@ -369,6 +373,8 @@ export function AgentInputArea({
               </div>
             </div>
           </div>
+
+          {toolbar}
 
           {showCount && (
             <div className="flex justify-start items-center mt-2 px-2">

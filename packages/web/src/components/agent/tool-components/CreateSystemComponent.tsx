@@ -55,7 +55,7 @@ function CreateSystemComponentImpl({
   const [credentialValues, setCredentialValues] = useState<Record<string, string>>({});
   const [showCredentials, setShowCredentials] = useState<Record<string, boolean>>({});
   const [isExecuting, setIsExecuting] = useState(false);
-  const { sendAgentRequest } = useAgentContext();
+  const { sendAgentRequest, modelControls } = useAgentContext();
   const { saveSystem, handleOAuth } = useSystemActions();
   const { toast } = useToast();
   const { systems, isRefreshing } = useSystems();
@@ -162,13 +162,18 @@ function CreateSystemComponentImpl({
   }, [isCompleted, systemId, invalidateSystems]);
 
   useEffect(() => {
-    if (isCompleted || tool.status === "declined" || tool.status === "error") {
+    if (
+      isCompleted ||
+      tool.status === "declined" ||
+      tool.status === "error" ||
+      tool.status === "awaiting_confirmation"
+    ) {
       setIsExecuting(false);
     }
   }, [isCompleted, tool.status]);
 
   const handleConfirm = useCallback(() => {
-    if (!sendAgentRequest) return;
+    if (!sendAgentRequest || !modelControls.canSend) return;
 
     const allValues: Record<string, string> = {};
     for (const key of Object.keys(allCredentialFields)) {
@@ -208,12 +213,13 @@ function CreateSystemComponentImpl({
     onToolMutation,
     onToolUpdate,
     sendAgentRequest,
+    modelControls.canSend,
     systemConfig,
     tool.id,
   ]);
 
   const handleCancel = useCallback(() => {
-    if (!sendAgentRequest) return;
+    if (!sendAgentRequest || !modelControls.canSend) return;
 
     onToolUpdate?.(tool.id, { status: "declined" });
     onToolMutation?.(tool.id, {
@@ -224,7 +230,7 @@ function CreateSystemComponentImpl({
     sendAgentRequest(undefined, {
       resumeToolCallId: tool.id,
     });
-  }, [onToolMutation, onToolUpdate, sendAgentRequest, tool.id]);
+  }, [onToolMutation, onToolUpdate, sendAgentRequest, modelControls.canSend, tool.id]);
 
   const allBlankFieldsFilled = useMemo(() => {
     if (blankFields.length === 0) return true;
@@ -469,7 +475,7 @@ function CreateSystemComponentImpl({
               size="sm"
               variant="glass"
               onClick={handleConfirm}
-              disabled={!allBlankFieldsFilled || isExecuting}
+              disabled={!allBlankFieldsFilled || isExecuting || !modelControls.canSend}
             >
               {isExecuting ? (
                 <>
@@ -480,7 +486,12 @@ function CreateSystemComponentImpl({
                 "Confirm"
               )}
             </Button>
-            <Button size="sm" variant="glass" onClick={handleCancel} disabled={isExecuting}>
+            <Button
+              size="sm"
+              variant="glass"
+              onClick={handleCancel}
+              disabled={isExecuting || !modelControls.canSend}
+            >
               Cancel
             </Button>
           </div>

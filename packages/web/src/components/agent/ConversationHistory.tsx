@@ -4,9 +4,11 @@ import { Button } from "@/src/components/ui/button";
 import { Card } from "@/src/components/ui/card";
 import { cn } from "@/src/lib/general-utils";
 import { loadFromCacheAsync, saveToCache } from "@/src/lib/cache-utils";
-import { Message, MessagePart } from "@superglue/shared";
+import { AgentModelSelection, Message, MessagePart } from "@superglue/shared";
 import { MessagesSquare, Trash2, X, Loader2 } from "lucide-react";
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
+import { getCacheScopeIdentifier } from "@/src/lib/cache-scope-identifier";
+import { selectionsEqual } from "@/src/lib/agent/model-controls";
 import { useSuperglueClient } from "@/src/queries/use-client";
 
 const MAX_CONVERSATIONS = 20;
@@ -16,6 +18,7 @@ const SUMMARY_REGEN_USER_MESSAGE_INTERVAL = 5;
 export type { Message, MessagePart };
 
 export interface Conversation {
+  modelSelection?: AgentModelSelection;
   id: string;
   title: string;
   summary?: string;
@@ -23,6 +26,19 @@ export interface Conversation {
   timestamp: Date;
   sessionId?: string | null;
   lastSummarizedMessageCount?: number;
+}
+
+export function updateConversationModelSelection(
+  conversations: Conversation[],
+  conversationId: string,
+  modelSelection?: AgentModelSelection,
+): Conversation[] {
+  const index = conversations.findIndex((conversation) => conversation.id === conversationId);
+  if (index === -1 || selectionsEqual(conversations[index].modelSelection, modelSelection))
+    return conversations;
+  const updated = [...conversations];
+  updated[index] = { ...conversations[index], modelSelection };
+  return updated;
 }
 
 const createConversationId = () =>
@@ -190,7 +206,9 @@ const upsertConversation = ({
   messages,
   latestMessageTimestamp,
   sessionId,
+  modelSelection,
 }: {
+  modelSelection?: AgentModelSelection;
   previousConversations: Conversation[];
   conversationId: string;
   title: string;
@@ -204,6 +222,7 @@ const upsertConversation = ({
   if (existingIndex === -1) {
     const newConversation: Conversation = {
       id: conversationId,
+      modelSelection,
       title,
       messages: snapshotMessages,
       timestamp: latestMessageTimestamp || new Date(),
@@ -249,6 +268,8 @@ const upsertConversation = ({
 };
 
 interface ConversationHistoryProps {
+  persistModelSelection?: boolean;
+  modelSelection?: AgentModelSelection;
   messages: Message[];
   currentConversationId: string | null;
   sessionId?: string | null;
@@ -259,6 +280,8 @@ interface ConversationHistoryProps {
 
 export function ConversationHistory({
   messages,
+  modelSelection,
+  persistModelSelection = false,
   currentConversationId,
   sessionId,
   onConversationLoad,
@@ -431,6 +454,7 @@ export function ConversationHistory({
             messages: meaningfulMessages,
             latestMessageTimestamp,
             sessionId,
+            modelSelection,
           }),
         ),
       );
@@ -467,6 +491,20 @@ export function ConversationHistory({
     sessionId,
     generateAndSaveSummary,
   ]);
+
+  useEffect(() => {
+    if (!persistModelSelection || !currentConversationId) return;
+    const conversationId = currentConversationId;
+    const scope = getCacheScopeIdentifier();
+    setConversations((previous) => {
+      if (
+        pendingConversationIdRef.current !== conversationId ||
+        getCacheScopeIdentifier() !== scope
+      )
+        return previous;
+      return updateConversationModelSelection(previous, conversationId, modelSelection);
+    });
+  }, [currentConversationId, modelSelection, persistModelSelection]);
 
   useEffect(() => {
     if (showHistory && buttonRef.current) {

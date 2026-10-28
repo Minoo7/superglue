@@ -1,4 +1,5 @@
 import {
+  AgentModelSelection,
   ConfirmationAction,
   ExecutionFileEnvelope,
   Message,
@@ -162,6 +163,7 @@ export interface AgentDefinition {
 }
 
 export interface AgentRequest {
+  modelSelection?: AgentModelSelection;
   agentId: AgentType;
   messages: Message[];
   userMessage?: string;
@@ -178,6 +180,7 @@ export interface AgentRequest {
 }
 
 export interface ValidatedAgentRequest {
+  modelSelection?: AgentModelSelection;
   agentId: AgentType;
   messages: Message[];
   userMessage?: string;

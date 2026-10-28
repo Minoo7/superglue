@@ -9,6 +9,7 @@ import { Message, MessageReference, ToolCall } from "@superglue/shared";
 import { AlertTriangle, ChevronDown, ChevronUp, Pencil, Plus, X } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
+import { AgentModelControls } from "./AgentModelControls";
 import { AgentCapabilities } from "./AgentCapabilities";
 import { AgentType } from "@/src/lib/agent/registries/agent-registry";
 import { AgentContextProvider, useAgentContext } from "./AgentContextProvider";
@@ -384,7 +385,8 @@ const MemoMessage = React.memo(
       .join(",");
     if (prevKeys !== nextKeys) return false;
 
-    // Functions are stable due to useCallback, so we can skip comparing them
+    if (prevProps.sendAgentRequest !== nextProps.sendAgentRequest) return false;
+    if (prevProps.handleSaveEdit !== nextProps.handleSaveEdit) return false;
     return true;
   },
 );
@@ -403,7 +405,7 @@ interface AgentInterfaceProps {
 
 export function AgentInterface({ initialPrompts }: AgentInterfaceProps = {}) {
   return (
-    <AgentContextProvider initialPrompts={initialPrompts}>
+    <AgentContextProvider initialPrompts={initialPrompts} enableModelControls>
       <AgentInterfaceContent
         chatTitle={initialPrompts?.chatTitle}
         chatIcon={initialPrompts?.chatIcon}
@@ -444,6 +446,7 @@ function AgentInterfaceContent({
     startNewConversation,
     handleSendMessage,
     startTemplatePrompt,
+    modelControls,
     welcomeRef,
   } = useAgentContext();
 
@@ -626,14 +629,14 @@ function AgentInterfaceContent({
   }, []);
 
   const onSendMessage = useCallback(async () => {
-    if (!input.trim() || input.length > MAX_MESSAGE_LENGTH) return;
+    if (!modelControls.canSend || !input.trim() || input.length > MAX_MESSAGE_LENGTH) return;
     const content = input;
     const sentReferences = reconcileReferences(content, references);
     setInput("");
     setReferences([]);
     scrollTriggerRef.current?.scrollToBottom();
     await handleSendMessage(content, sentReferences.length ? sentReferences : undefined);
-  }, [input, references, handleSendMessage]);
+  }, [input, references, handleSendMessage, modelControls.canSend]);
 
   const handleStopStreaming = useCallback(() => {
     stopStreaming();
@@ -652,6 +655,8 @@ function AgentInterfaceContent({
     <div className="h-full mx-auto flex flex-col relative">
       <div className="flex items-center gap-2 p-2 relative">
         <ConversationHistory
+          persistModelSelection={modelControls.persistenceEnabled}
+          modelSelection={modelControls.selection}
           messages={messages}
           currentConversationId={currentConversationId}
           sessionId={sessionId}
@@ -735,6 +740,8 @@ function AgentInterfaceContent({
       </ScrollToBottomContainer>
 
       <AgentInputArea
+        toolbar={<AgentModelControls />}
+        sendDisabled={!modelControls.canSend}
         value={input}
         onChange={handleInputChange}
         mentionItems={mentionItems}

@@ -3,7 +3,6 @@ import { initializeAIModel } from "@superglue/shared/utils/ai-model-init";
 import { LanguageModel, stepCountIs, streamText } from "ai";
 import { SSESubscriptionClient } from "../sse-subscriptions";
 import {
-  AgentRequest,
   ExecutionMode,
   ToolExecutionContext,
   ValidatedAgentRequest,
@@ -15,12 +14,12 @@ import {
   ErrorPart,
 } from "./agent-types";
 import {
-  validateAgentRequest,
   prepareMessages,
   buildToolsForAISDK,
   processConfirmations,
   registerSkillGatedTools as registerSkillTools,
 } from "./agent-request";
+import { agentProviderOptions, type ResolvedAgentModel } from "./model-controls.server";
 import { TOOL_REGISTRY } from "./registries/tool-registry";
 import { getEffectiveMode, getPendingOutput } from "./agent-tools/tool-policies";
 import { getErrorMessage } from "./agent-helpers";
@@ -69,6 +68,7 @@ export interface AgentClientConfig {
   token: string;
   apiEndpoint: string;
   abortSignal?: AbortSignal;
+  modelSelection?: ResolvedAgentModel;
 }
 
 export class AgentClient {
@@ -80,7 +80,7 @@ export class AgentClient {
   constructor(config: AgentClientConfig) {
     this.config = config;
 
-    this.model = initializeAIModel();
+    this.model = initializeAIModel({ modelOverride: config.modelSelection?.modelId });
 
     this.superglueClient = new SuperglueClient({
       apiKey: config.token,
@@ -252,10 +252,6 @@ export class AgentClient {
     return this.sanitizeAIMessages(aiMessages);
   }
 
-  validateRequest(body: AgentRequest): ValidatedAgentRequest {
-    return validateAgentRequest(body);
-  }
-
   async *streamResponse(validated: ValidatedAgentRequest): AsyncGenerator<StreamChunk> {
     const initialSkills = new Set<SkillName>();
 
@@ -365,6 +361,7 @@ export class AgentClient {
         model: this.model,
         messages: aiMessages,
         tools,
+        providerOptions: agentProviderOptions(this.config.modelSelection),
         stopWhen: stepCountIs(50),
         abortSignal: ctx.abortSignal,
         onStepFinish: () => {

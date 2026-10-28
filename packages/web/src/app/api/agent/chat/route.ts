@@ -1,5 +1,8 @@
 "use server";
 
+import { validateAgentRequest } from "@/src/lib/agent/agent-request";
+import { MODEL_SELECTION_REJECTED } from "@/src/lib/agent/model-controls";
+import { ModelSelectionError, resolveModelSelection } from "@/src/lib/agent/model-controls.server";
 import { AgentClient } from "@/src/lib/agent/agent-client";
 import { authenticateNextJSApiRequest } from "@/src/lib/api-auth";
 import { NextRequest, NextResponse } from "next/server";
@@ -27,21 +30,31 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
 
+    let validated;
+    let modelSelection;
+    try {
+      validated = validateAgentRequest(body);
+      modelSelection = await resolveModelSelection(validated.modelSelection, validated.agentId);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Agent request validation failed.";
+      return NextResponse.json(
+        {
+          error: errorMessage,
+          ...(error instanceof ModelSelectionError ? { code: MODEL_SELECTION_REJECTED } : {}),
+        },
+        {
+          status: error instanceof ModelSelectionError ? error.status : 400,
+        },
+      );
+    }
+
     client = new AgentClient({
       token: authContext.token,
       apiEndpoint: authContext.backendUrl,
       abortSignal: request.signal,
+      modelSelection,
     });
-
-    let validated;
-    try {
-      validated = client.validateRequest(body);
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Agent request validation failed.";
-      console.error("Agent request validation failed:", errorMessage);
-      return NextResponse.json({ error: errorMessage }, { status: 400 });
-    }
 
     const encoder = new TextEncoder();
 
