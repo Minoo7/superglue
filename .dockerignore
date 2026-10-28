@@ -28,3 +28,10 @@ dist
 
 # Documentation
 README.md
+**/.env.*
+**/.npmrc
+**/*.pem
+**/*.key
+**/credentials*
+**/tsconfig.tsbuildinfo
+.audit
