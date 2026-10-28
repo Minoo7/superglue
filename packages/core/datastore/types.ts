@@ -36,6 +36,7 @@ export type PrometheusRunMetrics = {
 export interface DataStore {
   // Initialization
   ready(): Promise<void>;
+  disconnect(): Promise<void>;
 
   // Run Methods
   getRun(params: { id: string; orgId?: string }): Promise<Run | null>;
