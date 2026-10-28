@@ -23,11 +23,13 @@ import { useAgentFileUpload } from "./hooks/use-agent-file-upload";
 import { useAgentMessages } from "./hooks/use-agent-messages";
 import { useAgentStreaming } from "./hooks/use-agent-streaming";
 import { useAgentTools } from "./hooks/use-agent-tools";
+import { useAgentModelSelection } from "./hooks/use-agent-model-selection";
 import { useAgentRequest } from "./hooks/use-agent-request";
 import type { AgentConfig, UploadedFile } from "./hooks/types";
 import type { AgentWelcomeRef } from "./welcome/AgentWelcome";
 
 export interface AgentContextValue {
+  modelControls: ReturnType<typeof useAgentModelSelection>;
   // Messages
   messages: Message[];
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
@@ -123,6 +125,7 @@ export function useAgentContext(): AgentContextValue {
 }
 
 interface AgentContextProviderProps {
+  enableModelControls?: boolean;
   children: React.ReactNode;
   config?: Partial<AgentConfig>;
   initialPrompts?: {
@@ -142,9 +145,13 @@ export function AgentContextProvider({
   children,
   config: configProp,
   initialPrompts,
+  enableModelControls = false,
 }: AgentContextProviderProps) {
   const config: AgentConfig = { ...DEFAULT_CONFIG, ...configProp };
   const { toast } = useToast();
+  const modelControls = useAgentModelSelection(
+    enableModelControls && config.agentId === AgentType.MAIN,
+  );
   const welcomeRef = useRef<AgentWelcomeRef>(null);
   const invalidateTools = useInvalidateTools();
   const invalidateSystems = useInvalidateSystems();
@@ -276,6 +283,7 @@ export function AgentContextProvider({
   const conversationIdRef = useRef<string | null>(null);
   const requestHook = useAgentRequest({
     config,
+    getModelSelection: modelControls.enabled ? modelControls.snapshot : undefined,
     messagesRef: messagesHook.messagesRef,
     setMessages: messagesHook.setMessages,
     setIsLoading: messagesHook.setIsLoading,
@@ -322,8 +330,38 @@ export function AgentContextProvider({
     }
   }, [streamingHook.currentStreamControllerRef, streamingHook.streamStateRef, messagesHook]);
 
+  const loadConversation = useCallback(
+    (conversation: Conversation) => {
+      if (modelControls.enabled) {
+        stopStreaming();
+        modelControls.restore(conversation.modelSelection);
+        streamingHook.streamStateRef.current = conversation.messages.some(
+          (message) =>
+            message.tools?.some((tool) => tool.status === "awaiting_confirmation") ||
+            message.parts?.some(
+              (part) => part.type === "tool" && part.tool?.status === "awaiting_confirmation",
+            ),
+        )
+          ? "paused"
+          : "idle";
+      }
+      conversationHook.loadConversation(conversation);
+    },
+    [modelControls, stopStreaming, conversationHook, streamingHook.streamStateRef],
+  );
+
+  const startNewConversation = useCallback(() => {
+    if (modelControls.enabled) {
+      stopStreaming();
+      modelControls.startNew();
+      streamingHook.streamStateRef.current = "idle";
+    }
+    conversationHook.startNewConversation();
+  }, [modelControls, stopStreaming, conversationHook, streamingHook.streamStateRef]);
+
   const handleSaveEdit = useCallback(
     async (messageId: string) => {
+      if (!modelControls.canSend) return;
       const MAX_MESSAGE_LENGTH = 50000;
       if (
         !messagesHook.editingContent.trim() ||
@@ -359,17 +397,18 @@ export function AgentContextProvider({
         references: carriedReferences.length ? carriedReferences : undefined,
       });
     },
-    [messagesHook, fileUpload, requestHook, config.initialMessages],
+    [messagesHook, fileUpload, requestHook, config.initialMessages, modelControls.canSend],
   );
 
   const handleSendMessage = useCallback(
     async (content: string, references?: MessageReference[]) => {
+      if (!modelControls.canSend) return;
       const MAX_MESSAGE_LENGTH = 50000;
       if (!content.trim() || content.length > MAX_MESSAGE_LENGTH) return;
       fileUpload.commitPendingFiles();
       await requestHook.sendAgentRequest(content, { references });
     },
-    [requestHook, fileUpload],
+    [requestHook, fileUpload, modelControls.canSend],
   );
 
   const startTemplatePrompt = useCallback(
@@ -405,6 +444,7 @@ export function AgentContextProvider({
 
   const value = useMemo<AgentContextValue>(
     () => ({
+      modelControls,
       // Messages
       messages: messagesHook.messages,
       setMessages: messagesHook.setMessages,
@@ -455,8 +495,8 @@ export function AgentContextProvider({
       currentConversationId: conversationHook.currentConversationId,
       setCurrentConversationId: conversationHook.setCurrentConversationId,
       sessionId: conversationHook.sessionId,
-      loadConversation: conversationHook.loadConversation,
-      startNewConversation: conversationHook.startNewConversation,
+      loadConversation,
+      startNewConversation,
 
       // Actions
       handleSendMessage,
@@ -478,6 +518,9 @@ export function AgentContextProvider({
       loadedSkills,
     }),
     [
+      modelControls,
+      loadConversation,
+      startNewConversation,
       messagesHook,
       fileUpload,
       streamingHook,

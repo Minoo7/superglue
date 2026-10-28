@@ -2,13 +2,19 @@
 
 import { tokenRegistry } from "@/src/lib/token-registry";
 import { AgentRequest, ToolExecutionPolicies } from "@/src/lib/agent/agent-types";
-import { ExecutionFileEnvelope, Message, MessageReference } from "@superglue/shared";
+import {
+  AgentModelSelection,
+  ExecutionFileEnvelope,
+  Message,
+  MessageReference,
+} from "@superglue/shared";
 import { useCallback, useRef } from "react";
 import type { AgentConfig, UploadedFile, UseAgentRequestReturn } from "./types";
 import type { StreamState } from "./use-agent-streaming";
 
 interface UseAgentRequestOptions {
   config: AgentConfig;
+  getModelSelection?: () => AgentModelSelection | undefined;
   messagesRef: React.MutableRefObject<Message[]>;
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
@@ -56,6 +62,7 @@ function parseFileStateSnapshot(raw: string): FileStateSnapshot {
 
 export function useAgentRequest({
   config,
+  getModelSelection,
   messagesRef,
   setMessages,
   setIsLoading,
@@ -173,9 +180,17 @@ export function useAgentRequest({
         references?: MessageReference[];
       },
     ) => {
+      let modelSelection: AgentModelSelection | undefined;
+      try {
+        modelSelection = getModelSelection?.();
+      } catch (error) {
+        toast({
+          title: "Model unavailable",
+          description: error instanceof Error ? error.message : "Choose an available model.",
+        });
+        return;
+      }
       const hasMessage = userMessage && userMessage.trim().length > 0;
-
-      await Promise.resolve();
 
       const hiddenStarterMessage = options?.hiddenStarterMessage?.trim();
       const hasHiddenStarterMessage = !!hiddenStarterMessage;
@@ -259,6 +274,7 @@ export function useAgentRequest({
 
       const request: AgentRequest = {
         agentId: config.agentId,
+        ...(modelSelection ? { modelSelection } : {}),
         messages: currentMessages,
         userMessage: hasMessage ? userMessage!.trim() : undefined,
         visibleUserMessageId,
@@ -352,6 +368,7 @@ export function useAgentRequest({
     },
     [
       config,
+      getModelSelection,
       messagesRef,
       setMessages,
       setIsLoading,
