@@ -75,7 +75,7 @@
       }
     },
     "superglue": {
-      "image": "ghcr.io/minoo7/superglue@sha256:09f29c9060f477e3e998f3eed3a666512a3797656b8e3bcac35f3c7438e19710",
+      "image": "ghcr.io/minoo7/superglue@sha256:6d78adac7882ca83ff567120d5f03f6a29260a52f3c0e26ce34af58abab47230",
       "restart": "unless-stopped",
       "init": false,
       "depends_on": {
