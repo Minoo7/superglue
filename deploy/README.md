@@ -1,6 +1,10 @@
 # Deploy a tested release
 
-Merge changes into `Minoo7/superglue` `main`. The Release workflow verifies source, builds the whole application on ARM64, publishes an immutable GHCR digest, and tests that digest anonymously. It then advances `production`. Portainer polls `production` and applies `compose.json`.
+Merge changes into `Minoo7/superglue` `main`. The Release workflow verifies source, builds the whole application remotely on ARM64 with Depot, publishes an immutable GHCR digest, and tests that digest anonymously. It then advances `production`. Portainer polls `production` and applies `compose.json`. The application stays on the private AWS instance at https://superglue.planasolutions.ai.
+
+Main release builds use the dedicated Depot project `superglue`, ID `p1j3pt7nsz`, and CLI `2.103.4`. Every pull request keeps the local ARM64 image build on GitHub Actions. Configure the project's GitHub OIDC trust for `Minoo7/superglue` with public pull requests disabled. Depot trust is repository-wide and has no branch or workflow predicate. This workflow restricts Depot builds to `main`.
+
+The image job delegates its per-job GHCR push credential to the remote builder. Application and CPA secrets are not build inputs. Local checks and pull request builds do not prove Depot authentication, publication, or AWS acceptance. Confirm those through a trusted main release and hosted acceptance checks.
 
 The first release starts in `hold`. Later candidates leave a held release unchanged. Portainer does not check application health or roll back an unhealthy release. Each update restarts the single application container.
 
@@ -66,7 +70,7 @@ The source check builds shared and core, checks web types, runs all web tests, a
 
 The image smoke resolves the registry index, ARM64 manifest, and config digests. It accepts Docker's corresponding config or manifest identity, requires the requested RepoDigest and source revision, and checks native canvas and sharp, Deno, every production Playwright version, web and API authentication, a Deno-backed tool, and an application S3 roundtrip. It also runs the browser confirmation recovery checks with synthetic responses, proves an in-flight Deno request completes during SIGTERM, then restarts and checks idle shutdown. Fixtures use disposable services and no production LLM credential. Live CPA behavior remains a hosted acceptance check.
 
-Build and test an image only on ARM64 Docker. The Dockerfile uses the npm and Deno lockfiles and installs each production Playwright browser. CI prints free disk before and after cleanup. A local source check does not prove that the image builds or runs.
+Build and test an image only on ARM64 Docker. The Dockerfile uses the npm and Deno lockfiles and installs each production Playwright browser. The pull request image job prints free disk before and after cleanup. A local source check does not prove that the image builds or runs.
 
 ```sh
 docker build -f deploy/Dockerfile --build-arg SOURCE_REVISION="$(git rev-parse HEAD)" -t superglue-test .
